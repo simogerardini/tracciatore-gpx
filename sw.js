@@ -1,6 +1,6 @@
 // Cache dell'interfaccia: l'app si apre anche con rete debole.
 // Routing, ricerca e mappe richiedono comunque la connessione.
-const CACHE = "tracciatore-v1";
+const CACHE = "tracciatore-v2";
 const SHELL = [
   "./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",

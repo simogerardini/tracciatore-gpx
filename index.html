@@ -240,13 +240,181 @@ const $ = s => document.querySelector(s);
 const GAP = 150, SNAP = 150;
 const PROFILES = {
   bike: [["trekking","Equilibrata: ciclabili e strade tranquille"],["safety","Massima priorità alle piste ciclabili"],["fastbike","Veloce, anche su strada"],["shortest","Più breve"]],
-  foot: [["hiking-beta","Escursionismo, preferisce sentieri"],["shortest","Più breve"]],
+  foot: [["hiking-beta","Escursionismo, preferisce sentieri"],["running","Running: fondi scorrevoli, poco traffico, verde"],["shortest","Più breve"]],
   car:  [["car-fast","Più veloce"],["car-eco","Più economica"]]
 };
-const SPEED = { bike:{ trekking:18, safety:16, fastbike:25, shortest:18 }, foot:{ "hiking-beta":4.5, shortest:5 }, car:{ "car-fast":55, "car-eco":45 } };
+const SPEED = { bike:{ trekking:18, safety:16, fastbike:25, shortest:18 }, foot:{ "hiking-beta":4.5, running:10, shortest:5 }, car:{ "car-fast":55, "car-eco":45 } };
 const OSRM = { bike:["routed-bike","bike"], foot:["routed-foot","foot"], car:["routed-car","driving"] };
 const GPX_TYPE = { bike:"cycling", foot:"hiking", car:"driving" };
 const MODE_NAME = { bike:"in bici", foot:"a piedi", car:"in auto" };
+const modeName = () => st.profile === "running" ? "di corsa" : MODE_NAME[st.mode];
+const gpxType = () => st.profile === "running" ? "running" : GPX_TYPE[st.mode];
+
+/* Profili BRouter personalizzati: caricati sul server alla prima richiesta (id temporaneo).
+   Validati con il parser di BRouter. La variante "basic" non usa le classi ambientali
+   (verde, acqua, rumore), nel caso il server non le supporti. */
+const CUSTOM_BRF = {
+  running: [`# Running - Tracciatore GPX
+# Superfici scorrevoli, poco traffico, preferenza per verde e acqua; evita scale e fondi sconnessi.
+
+---context:global
+
+assign downhillcost 0
+assign downhillcutoff 1.5
+assign uphillcost 0
+assign uphillcutoff 1.5
+
+assign turnInstructionMode = 1
+assign validForFoot 1
+
+---context:way
+
+assign turncost 0
+assign initialclassifier = if route=ferry then 1 else 0
+assign initialcost switch route=ferry 10000 0
+
+assign defaultaccess
+  switch access= not motorroad=yes
+  switch access=private|no 0 1
+
+assign issidewalk sidewalk=left|right|both|yes|separate
+
+assign footaccess
+  or issidewalk
+  switch foot= defaultaccess not foot=private|no|use_sidepath
+
+assign isrough surface=unpaved|gravel|ground|dirt|grass|sand|pebblestone|earth|mud|grass_paver|clay|rock|stone
+assign isbumpy surface=cobblestone|sett
+
+assign basecost
+  if highway=footway|pedestrian|living_street then 1.0
+  else if highway=cycleway then ( if foot=yes|designated then 1.0 else 1.15 )
+  else if highway=path then ( if isrough then 1.6 else 1.05 )
+  else if highway=track then ( if isrough then 1.7 else if tracktype=grade1|grade2 then 1.1 else 1.4 )
+  else if highway=residential|service|road then 1.2
+  else if highway=unclassified then 1.35
+  else if highway=tertiary|tertiary_link then ( if issidewalk then 1.4 else 2.2 )
+  else if highway=secondary|secondary_link then ( if issidewalk then 1.7 else 3.5 )
+  else if highway=primary|primary_link then ( if issidewalk then 2.2 else 6 )
+  else if highway=trunk|trunk_link then ( if issidewalk then 4 else 15 )
+  else if highway=steps then 3
+  else if highway=bridleway then 2.5
+  else 10000
+
+assign surfacepenalty
+  if isbumpy then 0.3
+  else if and isrough not highway=path|track then 0.5
+  else 0
+
+assign envbonus
+  add ( if estimated_forest_class=4|5|6 then -0.1 else 0 )
+  add ( if estimated_river_class=4|5|6 then -0.1 else 0 )
+      ( if estimated_noise_class=5|6 then 0.3 else if estimated_noise_class=4 then 0.15 else 0 )
+
+assign costfactor
+  if route=ferry then 5.67
+  else if highway= then 100000
+  else if highway=motorway|motorway_link|proposed|abandoned|construction then 100000
+  else if not footaccess then 100000
+  else max 1.0 add basecost add surfacepenalty envbonus
+
+---context:node
+
+assign defaultaccess
+  switch access= 1
+  switch access=private|no 0 1
+
+assign footaccess
+  switch foot= defaultaccess
+  switch foot=private|no 0 1
+
+assign initialcost switch footaccess 0 1000000
+`, `# Running - Tracciatore GPX
+# Superfici scorrevoli, poco traffico, preferenza per verde e acqua; evita scale e fondi sconnessi.
+
+---context:global
+
+assign downhillcost 0
+assign downhillcutoff 1.5
+assign uphillcost 0
+assign uphillcutoff 1.5
+
+assign turnInstructionMode = 1
+assign validForFoot 1
+
+---context:way
+
+assign turncost 0
+assign initialclassifier = if route=ferry then 1 else 0
+assign initialcost switch route=ferry 10000 0
+
+assign defaultaccess
+  switch access= not motorroad=yes
+  switch access=private|no 0 1
+
+assign issidewalk sidewalk=left|right|both|yes|separate
+
+assign footaccess
+  or issidewalk
+  switch foot= defaultaccess not foot=private|no|use_sidepath
+
+assign isrough surface=unpaved|gravel|ground|dirt|grass|sand|pebblestone|earth|mud|grass_paver|clay|rock|stone
+assign isbumpy surface=cobblestone|sett
+
+assign basecost
+  if highway=footway|pedestrian|living_street then 1.0
+  else if highway=cycleway then ( if foot=yes|designated then 1.0 else 1.15 )
+  else if highway=path then ( if isrough then 1.6 else 1.05 )
+  else if highway=track then ( if isrough then 1.7 else if tracktype=grade1|grade2 then 1.1 else 1.4 )
+  else if highway=residential|service|road then 1.2
+  else if highway=unclassified then 1.35
+  else if highway=tertiary|tertiary_link then ( if issidewalk then 1.4 else 2.2 )
+  else if highway=secondary|secondary_link then ( if issidewalk then 1.7 else 3.5 )
+  else if highway=primary|primary_link then ( if issidewalk then 2.2 else 6 )
+  else if highway=trunk|trunk_link then ( if issidewalk then 4 else 15 )
+  else if highway=steps then 3
+  else if highway=bridleway then 2.5
+  else 10000
+
+assign surfacepenalty
+  if isbumpy then 0.3
+  else if and isrough not highway=path|track then 0.5
+  else 0
+
+
+assign costfactor
+  if route=ferry then 5.67
+  else if highway= then 100000
+  else if highway=motorway|motorway_link|proposed|abandoned|construction then 100000
+  else if not footaccess then 100000
+  else max 1.0 add basecost surfacepenalty
+
+---context:node
+
+assign defaultaccess
+  switch access= 1
+  switch access=private|no 0 1
+
+assign footaccess
+  switch foot= defaultaccess
+  switch foot=private|no 0 1
+
+assign initialcost switch footaccess 0 1000000
+`]
+};
+const customIds = {};
+async function brouterProfile(name, refresh = false) {
+  if (!CUSTOM_BRF[name]) return name;
+  if (customIds[name] && !refresh) return customIds[name];
+  let lastErr = "";
+  for (const text of CUSTOM_BRF[name]) {
+    const r = await fetch("https://brouter.de/brouter/profile", { method: "POST", headers: { "Content-Type": "text/plain" }, body: text });
+    const j = await r.json();
+    if (j.profileid && !j.error) return (customIds[name] = j.profileid);
+    lastErr = j.error || `HTTP ${r.status}`;
+  }
+  throw new Error(`BRouter: profilo ${name} non accettato (${lastErr})`);
+}
 
 let uid = 0;
 const newPt = () => ({ id: ++uid, lat: null, lon: null, label: "" });
@@ -478,10 +646,13 @@ function applyRoute(res, fit) {
   if (fit) fitRoute();
 }
 
-async function viaBRouter(pts) {
+async function viaBRouter(pts, retried = false) {
   const lonlats = pts.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join("|");
-  const r = await fetch(`https://brouter.de/brouter?lonlats=${encodeURIComponent(lonlats)}&profile=${st.profile}&alternativeidx=0&format=geojson`);
+  const prof = await brouterProfile(st.profile, retried);
+  const r = await fetch(`https://brouter.de/brouter?lonlats=${encodeURIComponent(lonlats)}&profile=${prof}&alternativeidx=0&format=geojson`);
   const txt = await r.text();
+  // i profili personalizzati scadono sul server: ricarica una volta e riprova
+  if (!r.ok && CUSTOM_BRF[st.profile] && !retried && /profile|file/i.test(txt)) return viaBRouter(pts, true);
   if (!r.ok) throw new Error("BRouter: " + txt.trim().slice(0, 200));
   const f = JSON.parse(txt).features[0];
   return {
@@ -554,7 +725,7 @@ async function generateLoop(newVariant) {
     st.points = [s, ...best.vias.map((v, k) => ({ id: ++uid, lat: v.lat, lon: v.lon, label: `Passaggio generato ${k + 1}` }))];
     seq++; renderPoints(); renderMarkers();
     applyRoute(best.res, true);
-    if (!st.nameEdited) $("#name").value = `Anello ${MODE_NAME[st.mode]} ${km(best.d, 0)} km`;
+    if (!st.nameEdited) $("#name").value = `Anello ${modeName()} ${km(best.d, 0)} km`;
     const err = (best.d - target) / target * 100;
     setStatus(`Anello di ${km(best.d)} km: obiettivo ${km(target)} km, scarto ${err >= 0 ? "+" : ""}${err.toFixed(0)}%. Trascina i passaggi per ritoccarlo.`);
   } catch (e) {
@@ -700,7 +871,7 @@ function updateVerify() {
   const a = $("#verify");
   if (!ready()) { a.hidden = true; return; }
   const lonlats = routePoints().map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(";");
-  const prof = st.engine === "brouter" ? st.profile : PROFILES[st.mode][0][0];
+  const prof = st.engine !== "brouter" ? PROFILES[st.mode][0][0] : customIds[st.profile] || (CUSTOM_BRF[st.profile] ? "hiking-beta" : st.profile);
   const c = map.getCenter();
   a.href = `https://brouter.de/brouter-web/#map=${map.getZoom()}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}/standard&lonlats=${lonlats}&profile=${prof}`;
   a.hidden = false;
@@ -721,7 +892,7 @@ function buildGPX(name) {
 ${wpts}
   <trk>
     <name>${esc(name)}</name>
-    <type>${GPX_TYPE[st.mode]}</type>
+    <type>${gpxType()}</type>
     <trkseg>
 ${trkpts}
     </trkseg>
@@ -772,7 +943,7 @@ function renderTargetFields() {
   $("#fDist").hidden = byTime; $("#fTime").hidden = !byTime; $("#fSpeed").hidden = !byTime;
 }
 function setDefaultName() {
-  if (!st.nameEdited) $("#name").value = isLoop() ? `Anello ${MODE_NAME[st.mode]}` : `Percorso ${MODE_NAME[st.mode]}`;
+  if (!st.nameEdited) $("#name").value = isLoop() ? `Anello ${modeName()}` : `Percorso ${modeName()}`;
 }
 document.querySelectorAll("input[name=mode]").forEach(r => r.addEventListener("change", () => {
   st.mode = r.value; renderProfiles(); setDefaultName(); scheduleRoute();
@@ -789,7 +960,7 @@ $("#loopSpeed").addEventListener("input", () => { st.speedEdited = true; });
 $("#name").addEventListener("input", () => { st.nameEdited = true; });
 $("#loopGo").addEventListener("click", () => generateLoop(false));
 $("#loopAlt").addEventListener("click", () => generateLoop(true));
-$("#profile").addEventListener("change", e => { st.profile = e.target.value; renderProfiles(); scheduleRoute(); });
+$("#profile").addEventListener("change", e => { st.profile = e.target.value; renderProfiles(); setDefaultName(); scheduleRoute(); });
 $("#engine").addEventListener("change", e => { st.engine = e.target.value; renderProfiles(); scheduleRoute(); });
 $("#add").addEventListener("click", () => {
   const p = newPt();
